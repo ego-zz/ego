@@ -1,136 +1,108 @@
-/*jslint plusplus: false, laxbreak: true */
-/*global window: false, document: false, navigator: false, setTimeout: false, traceDeps: true, clearInterval: false, self: false, setInterval: false, importScripts: false */
+/*jslint plusplus: false, nomen: false, laxbreak: true, regexp: false*/
+/*global document: false, console: false*/
  
 "use strict";
 
-var require;
+var ego = (function (global, doc, ego) {
 
-var egover = [1,0,0];
-/*
-(function (cfg) {
-	var ostring = Object.prototype.toString,
-		script = document.getElementsByTagName('script')[0],
-		jsExtRegex = /\.js$/,
-		defaultContext = '_',
-		currentContext = defaultContext,
-		contexts = {};
+	var objString = Object.prototype.toString,
 
+		NON_HOST_TYPES = { "boolean": 1, "number": 1, "string": 1, "undefined": 1 },
+		isHostType = function (obj, property) {
+	        var type = typeof obj[property];
+	        return type === "object" ? !!obj[property] : !NON_HOST_TYPES[type];
+		},
+		testElem = doc && isHostType(doc, "createElement") && doc.createElement("DiV"),
+		hasCache = { "shibby": "hi" },
+
+		cfg = {};
+
+	/**
+	 * Tests if the argument is an function.
+	 * @param {*} A value to test.
+	 * @return {boolean}
+	 */
 	function isFunction(it) {
-		return ostring.call(it) === "[object Function]";
+		return objString.call(it) === "[object Function]";
 	}
 
-	if (typeof require !== "undefined") {
-		if (isFunction(require)) {
-			return;
-		}
-		cfg = require;
+	/**
+	 * Tests if the argument is an object. Will return true for null and arrays.
+	 * @param {*} A value to test.
+	 * @return {boolean}
+	 */
+	function isObject(it) {
+		return typeof it === "object";
 	}
 
-	/*
-	require("my.module");
-	require(["module1", "module2"]);
-	require("my.module", function(){});
-	require("my.module", "contextname");
-	require("my.module", function(){}, "contextname");
-	* /
-	function req(moduleName, callback, contextName) {
-		if (moduleName === "exports" || moduleName === "module") {
-			throw new Error("require of " + moduleName + " is not allowed.");
-		}
-
-		if (!isFunction(callback)) {
-			contextName = contextName || callback;
-			callback = null;
-		}
-
-		contextName = contextName || currentContext;
-
-		if (typeof moduleName === "object") {
-			for (var i = 0, l = moduleName.length; i < l; i++) {
-				req(moduleName[i], contextName);
-			}
-			if (callback) {
-				callback();
-			}
-		} else {
-			var module = contexts[contextName].defined[moduleName];
-			if (module !== undefined) {
-				return module;
-			}
-			console.debug("Module " + moduleName + " not loaded... loading!");
-		}
+	// define the Array.isArray() ES5 standard function.
+	if (!Array.isArray) {
+		Array.isArray = function (o) {
+			return objString.call(o) === "[object Array]";
+		};
 	}
 
-	req.version = [0, 1, 0, "$trunk$"];
+	// check if ego is a config object
+	if (ego && isObject(ego) && !Array.isArray(ego)) {
+		cfg = ego;
+	}
 
-	req.isFunction = isFunction;
-
-	req.def = function (moduleName, deps, callback, contextName) {
-		// define the module!
-		return req;
+	// define the main ego object
+	ego = {
+		version: [0, 1, 0, "$trunk$"],
+		config: cfg,
+		isFunction: isFunction,
+		isObject: isObject,
+		isHostType: isHostType
 	};
 
-	req.nameToUrl = function (moduleName, ext) {
-		var p = moduleName.indexOf(':'),
-			c = moduleName.charAt(0),
-			loc, syms, i, url;
-
-		if (p !== -1) {
-			loc = (cfg.locations || {})[moduleName.substring(0, p)];
-			if (loc) {
-				moduleName = moduleName.substring(p + 1);
-			}
+	/**
+	 * Returns true or false for whether or not a specific browser feature is supported.
+	 * @param {string} The name of the feature to test.
+	 * @return {boolean}
+	 */
+	function has(name) {
+		if (isFunction(hasCache[name])) {
+			hasCache[name] = hasCache[name](global, doc, testElem);
 		}
-
-		if ((p !== -1 && !loc) || c === '/' || c === '.' || jsExtRegex.test(moduleName)) {
-			return moduleName; //Just a plain path, not module name lookup, so just return it.
-		}
-
-		syms = moduleName.split('/');
-		i = syms.length;
-
-		/* do we need this?
-		while (i--) {
-			parentModule = syms.slice(0, i).join('/');
-			if (paths[parentModule]) {
-				syms.splice(0, i, paths[parentModule]);
-				break;
-			}
-		}
-		* /
-
-		if (loc) {
-			if (loc.charAt(loc.length - 1) === '/') {
-				loc = loc.substring(0, loc.length - 1);
-			}
-			syms.unshift(loc);
-		}
-
-		url = syms.join('/') + (ext || ".js");
-		return (url.charAt(0) === '/' || url.indexOf(':') !== -1 ? "" : cfg.baseUrl || "") + url;
-	};
-	
-	req.load = function (moduleName) {
-		var url = req.nameToUrl(moduleName);
-		req.attach(url);
-	};
-
-	req.attach = function (url) {
-		var n = document.createElement("script");
-		n.type = "text/javascript";
-		n.async = true;
-		n.src = url;
-		return script.parentNode.insertBefore(n, script);
-	};
-
-	if (cfg) {
-		req(cfg.deps);
+		return hasCache[name];
 	}
-	
-	require = req;
-}({
-	deps: [ "ego", "shibby", "test" ],
-	locations: {
-		ego: "http://modules.ego-project.com/"
+
+	/**
+	 * Adds a feature detection test function.
+	 * @param {string} The name of the feature to test.
+	 * @param {function(Window, Document, Element): boolean} A test function to
+	 *     register. If a function, queued for testing until actually needed. The
+	 *     test function should return a boolean indicating the presence of a
+	 *     feature or bug.
+	 * @param {boolean=} Omit if `test` is not a function. Provides a way to
+	 *     immediately run the test and cache the result.
+	 */
+	function add(name, test, now) {
+		hasCache[name] = now ? test(global, doc, testElem) : test;
 	}
-}));*/
+	has.add = add;
+
+	// TODO: check if there's local storage and if the tests have been cached
+
+	/**
+	 * Returns a module. It will load the module if it isn't already loaded.
+	 */
+	function require() {
+	}
+
+	/**
+	 * Defines a module.
+	 */
+	function define() {
+	}
+
+	ego.has = has;
+	ego.require = require;
+	ego.define = define;
+
+	return ego;
+
+}((function () {
+	return this;
+}()), document, ego));
