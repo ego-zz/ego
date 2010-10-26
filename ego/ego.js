@@ -85,6 +85,10 @@ var ego = (function (global, doc, ego) {
 	}
 	has.add = add;
 
+	/**
+	 * Runs all feature detection tests and MD5 hashes the results.
+	 * @return {string} The MD5 hash.
+	 */
 	function hash() {
 		// TODO: alphabetize hasCache keys, then build string. If value is a test function, run it.
 		var i, s = "";
